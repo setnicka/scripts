@@ -1,0 +1,16 @@
+#!/bin/bash
+
+die () { echo "$@" >&2; exit 1; }
+
+crf=27
+
+[ $# -gt 1 ] || [ $# -gt 0 -a "$1" != "--night" ] || die "Usage: $0 [--night] <files...>
+Files will be converted to \${file/.MP4}.mp4 videos"
+
+[ "$1" = "--night" ] && shift && crf=23;
+
+for file in "$@"; do
+	outputfile="${file/.MP4}.mp4"
+	ffmpeg -i "$file" -c:v libx265 -x265-params crf=$crf "$outputfile";
+	touch -r "$file" "$outputfile"	
+done
