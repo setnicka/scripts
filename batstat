@@ -1,0 +1,81 @@
+#!/usr/bin/python3
+
+import os
+import os.path
+
+sysPath="/sys/class/power_supply/"
+batteries = []
+
+
+def getValue(device, stat):
+    return open(os.path.join(sysPath, device, stat), "r").read().strip()
+
+
+def getValueInt(device, stat):
+    return int(getValue(device, stat))
+
+
+def sumValue(stat):
+    sum = 0
+    for bat in batteries:
+        sum += bat[stat]
+    return sum
+
+
+def secondsToDuration(seconds):
+    seconds = int(seconds)
+    hours = seconds // 3600
+    seconds %= 3600
+    minutes = seconds // 60
+    seconds %= 60
+    s = f"{minutes:02}:{seconds:02d}"
+    if hours > 0:
+        s = f"{hours}:"+s
+    return s
+
+
+# Get all values
+for device in os.listdir(sysPath):
+    if device.startswith("BAT"):
+        bat = {"name": device}
+        for s in ["status"]:
+            bat[s] = getValue(device, s)
+        for s in ["energy_full", "energy_now", "power_now"]:
+            bat[s] = getValueInt(device, s)
+        batteries.append(bat)
+batteries.sort(key=lambda x: x["name"])
+
+# Do computations and display
+totalCapacity = sumValue("energy_full")
+currentCharge = sumValue("energy_now")
+chargeRate = sumValue("power_now")
+
+globalStatus = "Not charging"
+for bat in batteries:
+    if bat["status"] == "Charging":
+        globalStatus = "Charging"
+    if bat["status"] == "Discharging":
+        globalStatus = "Discharging"
+
+chargingInfo = "Not charging"
+if chargeRate > 0:
+    if globalStatus == "Charging":
+        remainingSeconds = (totalCapacity-currentCharge) / chargeRate * 3600
+    elif globalStatus == "Discharging":
+        remainingSeconds = currentCharge / chargeRate * 3600
+    chargingInfo = f"{globalStatus} {chargeRate/1000**2:.2f} W/hour, {secondsToDuration(remainingSeconds)} remaining"
+
+if len(batteries) == 1:
+    batteryCountInfo = "Battery"
+else:
+    stat = ""
+    for bat in batteries:
+        if bat["status"] == "Charging":
+            stat += "+"
+        elif bat["status"] == "Discharging":
+            stat += "-"
+        else:
+            stat += " "
+    batteryCountInfo = f"{len(batteries)} batteries [{stat}]"
+
+print(f"{batteryCountInfo}: {100*currentCharge/totalCapacity:.2f}% ({currentCharge/1000**2:.1f}/{totalCapacity/1000**2:.1f} Wh). {chargingInfo}.")
