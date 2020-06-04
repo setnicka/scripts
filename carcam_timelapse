@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+# How much to speed up the clips. Quick reference:
+speedup=20
+output="timelapse.mp4"
+
+while getopts "s:o:h" opt; do
+  case $opt in
+    s) speedup=$OPTARG
+      ;;
+    o) output="$OPTARG"
+      ;;
+    a) audio_options=""
+      ;;
+    h)
+      echo "Usage: $0 [-s SPEED] [-o OUTPUT_FILE] VIDEO_FILES..."
+      echo ""
+      echo "Options:"
+      echo "  -s sets speed (default: $speedup)"
+      echo "  -o sets output file (default: $output)"
+      exit 0
+      ;;
+    *) echo 'error' >&2
+      exit 1
+  esac
+done
+shift $(($OPTIND - 1))
+
+globalInform() {
+    echo -e "\e[1;32m[$1]\e[0m"
+}
+
+VIDEO=1
+VIDEOS=$#
+inputInform() {
+    echo -e "\e[1;33m[Input video $VIDEO/$VIDEOS]\e[0m: $1"
+    VIDEO=$((VIDEO+1))
+}
+
+TEMPDIR=`mktemp -d`
+echo > "$TEMPDIR/concat.txt"
+
+globalInform "Creating videos"
+for file in "$@"; do
+  video_name="${file%.*}"
+  extension="${file##*.}"
+  temp_video_name="$TEMPDIR/$(basename "$video_name")-speedy.$extension"
+
+  inputInform "$file -> $temp_video_name"
+  ffmpeg -i "$file" -vf "setpts=PTS/$speedup" -an "$temp_video_name"
+
+  echo "file '$temp_video_name'" >> "$TEMPDIR/concat.txt"
+done
+
+# Concatenate all the videos using the file listing.
+globalInform "Concatenating files"
+ffmpeg -safe 0 -f concat -i "$TEMPDIR/concat.txt" -c copy "$output"
+
+globalInform "Removing tempdir"
+rm -r "$TEMPDIR"
+
+globalInform "Final file: $output"
